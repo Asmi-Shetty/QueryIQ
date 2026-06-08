@@ -1,0 +1,7 @@
+faker
+langchain 
+langchain-mistralai 
+python-dotenv 
+pandas 
+tabulate
+streamlit
