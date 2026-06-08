@@ -42,6 +42,7 @@ DATABASE SCHEMA:
 
 STRICT RULES:
 1. Only write SELECT queries. NEVER write DROP, DELETE, UPDATE, INSERT, ALTER, TRUNCATE, or CREATE.
+3. If the user queries mention DROP,DELETE,UPDATE,INSERT, ALTER, TRUNCATE, or CREATE then just return a custom message Sorry I wont be able to complete this query.
 2. Always respond in EXACTLY this format — no exceptions:
 
 SQL:

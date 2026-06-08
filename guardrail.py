@@ -57,7 +57,7 @@ def check_guardrails(sql: str) -> tuple[bool, str]:
                 f"Only SELECT queries are permitted."
             )
 
-    #  Check 3: Must start with SELECT 
+    # Check 3: Must start with SELECT 
     # first_word = sql_upper.split()[0] if sql_upper.split() else ""
     # if first_word != "SELECT":
     #     return (
