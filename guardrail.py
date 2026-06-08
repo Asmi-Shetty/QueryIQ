@@ -1,6 +1,6 @@
 
-# Responsibility:It validate the SQL query before execution.
-#
+# Responsibility: It validates the SQL query before execution.
+
 # Checks performed (in order):
 #   1. Not empty
 #   2. No destructive keywords (DROP, DELETE, UPDATE, etc.)
@@ -76,7 +76,7 @@ def check_guardrails(sql: str) -> tuple[bool, str]:
             "Only a single SELECT query is allowed per request."
         )
 
-    # ── Check 5: No system table access ────────────────────────────
+    #  Check 5: No system table access 
     for sys_table in SYSTEM_TABLES:
         if sys_table.lower() in sql_stripped.lower():
             return (
@@ -84,7 +84,7 @@ def check_guardrails(sql: str) -> tuple[bool, str]:
                 f"Blocked: Access to system table '{sys_table}' is not allowed."
             )
 
-    # ── Check 6: Query length limit ────────────────────────────────
+    #  Check 6: Query length limit 
     if len(sql_stripped) > MAX_QUERY_LENGTH:
         return (
             False,

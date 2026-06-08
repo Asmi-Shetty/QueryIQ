@@ -6,7 +6,7 @@
 import streamlit as st
 import sqlite3
 
-# ── Page config (must be FIRST Streamlit call) ──────────────────────────────
+# ── Page config (must be FIRST Streamlit call) 
 st.set_page_config(
     page_title="SQL Agent",
     page_icon="🗄️",
@@ -18,9 +18,9 @@ from agent          import run_agent
 from chat_history   import ChatHistory
 from schema_context import get_schema_context
 
-# ════════════════════════════════════════════════════════════════════════════
+
 # CUSTOM CSS
-# ════════════════════════════════════════════════════════════════════════════
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
@@ -245,9 +245,8 @@ hr {
 """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════════════════════
+
 # SESSION STATE
-# ════════════════════════════════════════════════════════════════════════════
 if "history"   not in st.session_state:
     st.session_state.history  = ChatHistory()
 if "messages"  not in st.session_state:

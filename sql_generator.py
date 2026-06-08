@@ -20,9 +20,7 @@ from schema_context import get_schema_context
 load_dotenv()
 
 
-# ─────────────────────────────────────────
-# BUILD THE LANGCHAIN PIPELINE (once at import)
-# ─────────────────────────────────────────
+# BUILD THE LANGCHAIN PIPELINE 
 
 def _build_chain(schema: str):
     """
