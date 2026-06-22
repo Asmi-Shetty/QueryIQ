@@ -19,11 +19,12 @@ cursor.execute("PRAGMA foreign_keys = ON")
 
 
 # 2. DROP OLD TABLES (so that we can re-run the code safely)
+# Drop child tables first to respect foreign key constraints
 
 cursor.execute("DROP TABLE IF EXISTS projects")
+cursor.execute("DROP TABLE IF EXISTS salaries")
 cursor.execute("DROP TABLE IF EXISTS employees")
 cursor.execute("DROP TABLE IF EXISTS departments")
-cursor.execute("DROP TABLE IF EXISTS salaries")
 
 
 # 3. CREATE TABLES
@@ -202,11 +203,11 @@ print("Salary history seeded.")
 
 conn.commit()
 
-print("\n📊 Row counts:")
+print("\n[*] Row counts:")
 for table in ["departments", "employees", "projects", "salaries"]:
     cursor.execute(f"SELECT COUNT(*) FROM {table}")
     count = cursor.fetchone()[0]
-    print(f"   {table:<15} → {count} rows")
+    print(f"   {table:<15} -> {count} rows")
 
 # Preview of each table
 print("\n Sample data preview:")

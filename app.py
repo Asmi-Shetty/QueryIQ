@@ -8,7 +8,7 @@ import sqlite3
 
 # ── Page config (must be FIRST Streamlit call) 
 st.set_page_config(
-    page_title="SQL Agent",
+    page_title="QueryIQ",
     page_icon="🗄️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -23,7 +23,7 @@ from schema_context import get_schema_context
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
     --bg-primary:    #0d0f12;
@@ -40,7 +40,7 @@ st.markdown("""
     --border:        #252a35;
     --border-accent: #2e3545;
     --font-mono:     'JetBrains Mono', monospace;
-    --font-display:  'Syne', sans-serif;
+    --font-display:  'Inter', sans-serif;
     --radius:        10px;
 }
 
@@ -54,8 +54,18 @@ html, body, .stApp {
 .stDeployButton { display: none; }
 
 .main .block-container {
-    padding: 2rem 2.5rem 4rem 2.5rem !important;
+    padding: 0rem 2.5rem 4rem 2.5rem !important;
     max-width: 1000px !important;
+    margin-top: -80px !important;
+}
+
+/* Remove Streamlit's built-in top gap */
+[data-testid="stAppViewContainer"] > .main {
+    padding-top: 0px !important;
+}
+[data-testid="stHeader"] {
+    height: 0px !important;
+    display: none !important;
 }
 
 [data-testid="stSidebar"] {
@@ -84,9 +94,9 @@ html, body, .stApp {
 }
 .agent-title {
     font-family: var(--font-display) !important;
-    font-size: 1.6rem; font-weight: 800;
+    font-size: 1.5rem; font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: -0.5px; line-height: 1.1; margin: 0;
+    letter-spacing: 0px; line-height: 1.2; margin: 0;
 }
 .agent-subtitle {
     font-size: 0.72rem; color: var(--text-secondary);
@@ -230,7 +240,7 @@ hr {
 }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-.empty-state { text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
+.empty-state { text-align: center; padding: 0.2rem 2rem; color: var(--text-muted); }
 .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
 .empty-title {
     font-family: var(--font-display); font-size: 1.1rem;
@@ -240,6 +250,105 @@ hr {
 
 .no-rows-msg {
     color: var(--text-muted); font-size: 0.78rem; padding: 4px 0 12px;
+}
+
+/* ── Custom Loader ───────────────────────────────── */
+.custom-loader-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 0;
+    gap: 1.2rem;
+}
+.loader-orbit {
+    position: relative;
+    width: 64px;
+    height: 64px;
+}
+.loader-core {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 14px 4px rgba(0,229,160,0.45);
+    animation: core-pulse 1.4s ease-in-out infinite;
+}
+@keyframes core-pulse {
+    0%,100% { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+    50%      { transform: translate(-50%,-50%) scale(1.25); opacity: 0.6; }
+}
+.loader-ring {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    animation: ring-spin 1.6s linear infinite;
+}
+.loader-ring::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: 50%;
+    transform: translateX(-50%);
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    box-shadow: 0 0 8px 2px rgba(77,159,255,0.6);
+}
+.loader-ring2 {
+    position: absolute;
+    top: 6px; left: 6px;
+    width: calc(100% - 12px); height: calc(100% - 12px);
+    border-radius: 50%;
+    animation: ring-spin 2.2s linear infinite reverse;
+}
+.loader-ring2::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: 50%;
+    transform: translateX(-50%);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-amber);
+    box-shadow: 0 0 7px 2px rgba(255,179,71,0.55);
+}
+@keyframes ring-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.loader-label {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.loader-dots span {
+    animation: blink 1.2s infinite;
+    opacity: 0;
+}
+.loader-dots span:nth-child(1) { animation-delay: 0s; }
+.loader-dots span:nth-child(2) { animation-delay: 0.3s; }
+.loader-dots span:nth-child(3) { animation-delay: 0.6s; }
+@keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+.loader-bar-wrap {
+    width: 120px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+}
+.loader-bar {
+    height: 100%;
+    width: 40%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+    animation: bar-slide 1.6s ease-in-out infinite;
+}
+@keyframes bar-slide {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(200%);  }
+    100% { transform: translateX(-100%); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -339,8 +448,22 @@ def render_result(result: dict):
 def run_query(question: str):
     if not question.strip():
         return
-    with st.spinner("Running query…"):
-        result = run_agent(question.strip(), st.session_state.history)
+    loader = st.empty()
+    loader.markdown("""
+<div class="custom-loader-wrap">
+    <div class="loader-orbit">
+        <div class="loader-core"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-ring2"></div>
+    </div>
+    <div class="loader-label">
+        Processing query<span class="loader-dots"><span>.</span><span>.</span><span>.</span></span>
+    </div>
+    <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+</div>
+""", unsafe_allow_html=True)
+    result = run_agent(question.strip(), st.session_state.history)
+    loader.empty()
     st.session_state.messages.append({"question": question.strip(), "result": result})
 
 
@@ -357,7 +480,7 @@ with st.sidebar:
     st.markdown("""
 <div style="padding:0 0 1rem 0;border-bottom:1px solid var(--border);margin-bottom:1.2rem;">
     <div style="font-family:var(--font-display);font-size:1rem;font-weight:700;color:var(--text-primary);">
-        🗄️ SQL Agent
+        ⚡ QueryIQ
     </div>
     <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:0.08em;">
         LangChain + Mistral
@@ -442,8 +565,8 @@ st.markdown("""
 <div class="agent-header">
     <div class="agent-header-icon">🗄️</div>
     <div>
-        <div class="agent-title">NL → SQL Agent</div>
-        <div class="agent-subtitle">Ask anything about your database in plain English</div>
+        <div class="agent-title">QueryIQ</div>
+        <div class="agent-subtitle">Ask smarter questions. Get instant answers.</div>
     </div>
 </div>""", unsafe_allow_html=True)
 
@@ -514,5 +637,5 @@ if send_clicked and user_input.strip():
 st.markdown("""
 <div style="text-align:center;margin-top:3rem;font-size:0.65rem;
             color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em;">
-    NL-to-SQL Agent &nbsp;·&nbsp; LangChain + Mistral &nbsp;·&nbsp; SQLite
+    QueryIQ &nbsp;·&nbsp; LangChain + Mistral &nbsp;·&nbsp; SQLite
 </div>""", unsafe_allow_html=True)
