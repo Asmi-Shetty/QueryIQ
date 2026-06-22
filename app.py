@@ -5,6 +5,9 @@
 
 import streamlit as st
 import sqlite3
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
 
 # ── Page config (must be FIRST Streamlit call) 
 st.set_page_config(
@@ -252,6 +255,30 @@ hr {
     color: var(--text-muted); font-size: 0.78rem; padding: 4px 0 12px;
 }
 
+/* ── Visualization Section ──────────────────────── */
+.viz-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius) var(--radius) 0 0;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 14px;
+}
+.viz-accent { color: var(--accent-green); font-weight: 700; }
+.viz-body {
+    background: var(--bg-card);
+    border: 1px solid var(--border-accent);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 16px;
+}
+
 /* ── Custom Loader ───────────────────────────────── */
 .custom-loader-wrap {
     display: flex;
@@ -435,6 +462,7 @@ def render_result(result: dict):
     if df is not None:
         if not df.empty:
             st.dataframe(df, use_container_width=True, hide_index=True)
+            smart_charts(df)
         else:
             st.markdown(
                 '<p class="no-rows-msg">No rows returned for this query.</p>',
@@ -443,8 +471,151 @@ def render_result(result: dict):
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# HELPERS
+# SMART VISUALIZATION
+# Auto-detects column types and renders the most actionable chart(s).
 # ════════════════════════════════════════════════════════════════════════════
+PLOT_THEME = dict(
+    paper_bgcolor="#13161b",
+    plot_bgcolor="#1a1e26",
+    font_color="#8892a4",
+    font_family="JetBrains Mono, monospace",
+    margin=dict(l=12, r=12, t=36, b=12),
+    colorway=["#00e5a0", "#4d9fff", "#ffb347", "#ff5f5f", "#a78bfa", "#34d399"],
+)
+
+def _style(fig):
+    """Apply dark theme to any Plotly figure."""
+    fig.update_layout(
+        **PLOT_THEME,
+        xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+        yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+        legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+    )
+    return fig
+
+
+def smart_charts(df: pd.DataFrame):
+    """Render bar and/or line charts intelligently based on column types."""
+    if df is None or df.empty or len(df.columns) < 2:
+        return
+
+    # ── Classify columns ─────────────────────────────────────────────
+    num_cols  = df.select_dtypes(include="number").columns.tolist()
+    cat_cols  = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
+    # Detect date-like columns hidden as strings
+    date_cols = []
+    for col in cat_cols:
+        try:
+            parsed = pd.to_datetime(df[col], infer_datetime_format=True, errors="coerce")
+            if parsed.notna().sum() / max(len(df), 1) > 0.5:
+                df[col] = parsed
+                date_cols.append(col)
+        except Exception:
+            pass
+    cat_cols = [c for c in cat_cols if c not in date_cols]
+
+    charts = []   # list of (label, fig) tuples
+
+    # ── Bar chart: categorical × numeric ─────────────────────────────
+    if cat_cols and num_cols:
+        x_col = cat_cols[0]
+        # Aggregate if rows > unique x values (e.g. GROUP BY already done)
+        agg_df = df[[x_col] + num_cols[:3]].copy()
+        # If too many categories, keep top 20 by first numeric col
+        if agg_df[x_col].nunique() > 20:
+            top = agg_df.nlargest(20, num_cols[0])[x_col]
+            agg_df = agg_df[agg_df[x_col].isin(top)]
+        agg_df = agg_df.sort_values(num_cols[0], ascending=False)
+
+        fig_bar = go.Figure()
+        colors = PLOT_THEME["colorway"]
+        for i, y_col in enumerate(num_cols[:3]):
+            fig_bar.add_trace(go.Bar(
+                x=agg_df[x_col].astype(str),
+                y=agg_df[y_col],
+                name=y_col,
+                marker_color=colors[i % len(colors)],
+                marker_line_width=0,
+                opacity=0.9,
+            ))
+        fig_bar.update_layout(
+            title=dict(text=f"📊  {num_cols[0]} by {x_col}", font_size=13),
+            barmode="group",
+            bargap=0.2,
+            **PLOT_THEME,
+            xaxis=dict(gridcolor="#252a35", tickangle=-30),
+            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+            legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+        )
+        charts.append(("Bar Chart", fig_bar))
+
+    # ── Line chart: date × numeric ────────────────────────────────────
+    if date_cols and num_cols:
+        x_col  = date_cols[0]
+        line_df = df[[x_col] + num_cols[:3]].sort_values(x_col)
+        fig_line = go.Figure()
+        colors = PLOT_THEME["colorway"]
+        for i, y_col in enumerate(num_cols[:3]):
+            fig_line.add_trace(go.Scatter(
+                x=line_df[x_col],
+                y=line_df[y_col],
+                mode="lines+markers",
+                name=y_col,
+                line=dict(color=colors[i % len(colors)], width=2),
+                marker=dict(size=5),
+                fill="tozeroy" if i == 0 else None,
+                fillcolor=f"rgba(0,229,160,0.06)" if i == 0 else None,
+            ))
+        fig_line.update_layout(
+            title=dict(text=f"📈  {num_cols[0]} over time", font_size=13),
+            **PLOT_THEME,
+            xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+            legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+        )
+        charts.append(("Line Chart", fig_line))
+
+    # ── Fallback: two numeric cols → scatter ──────────────────────────
+    if not charts and len(num_cols) >= 2:
+        fig_sc = px.scatter(
+            df, x=num_cols[0], y=num_cols[1],
+            trendline="ols" if len(df) > 3 else None,
+            title=f"📊  {num_cols[1]} vs {num_cols[0]}",
+        )
+        fig_sc.update_traces(marker=dict(color="#00e5a0", size=7))
+        fig_sc.update_layout(
+            **PLOT_THEME,
+            xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+        )
+        charts.append(("Scatter", fig_sc))
+
+    if not charts:
+        return
+
+    # ── Render ────────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="viz-header">'
+        '<span class="viz-accent">▲</span> Insights &nbsp;&mdash;&nbsp; '
+        'Auto-generated visualizations'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="viz-body">', unsafe_allow_html=True)
+
+    if len(charts) == 1:
+        st.plotly_chart(charts[0][1], use_container_width=True, config={"displayModeBar": False})
+    else:
+        tabs = st.tabs([label for label, _ in charts])
+        for tab, (_, fig) in zip(tabs, charts):
+            with tab:
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+
 def run_query(question: str):
     if not question.strip():
         return
