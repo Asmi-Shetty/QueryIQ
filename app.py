@@ -495,17 +495,19 @@ def _style(fig):
 
 
 def smart_charts(df: pd.DataFrame):
-    """Render bar and/or line charts intelligently based on column types."""
+    """Always render Bar Chart, Line Graph, and Pie Chart tabs."""
     if df is None or df.empty or len(df.columns) < 2:
         return
 
-    # ── Classify columns ─────────────────────────────────────────────
-    num_cols  = df.select_dtypes(include="number").columns.tolist()
-    cat_cols  = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    import hashlib
 
-    # Detect date-like columns hidden as strings
+    # ── Classify columns ───────────────────────────────────
+    df = df.copy()
+    num_cols = df.select_dtypes(include="number").columns.tolist()
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
     date_cols = []
-    for col in cat_cols:
+    for col in list(cat_cols):
         try:
             parsed = pd.to_datetime(df[col], infer_datetime_format=True, errors="coerce")
             if parsed.notna().sum() / max(len(df), 1) > 0.5:
@@ -515,86 +517,94 @@ def smart_charts(df: pd.DataFrame):
             pass
     cat_cols = [c for c in cat_cols if c not in date_cols]
 
-    charts = []   # list of (label, fig) tuples
-
-    # ── Bar chart: categorical × numeric ─────────────────────────────
-    if cat_cols and num_cols:
-        x_col = cat_cols[0]
-        # Aggregate if rows > unique x values (e.g. GROUP BY already done)
-        agg_df = df[[x_col] + num_cols[:3]].copy()
-        # If too many categories, keep top 20 by first numeric col
-        if agg_df[x_col].nunique() > 20:
-            top = agg_df.nlargest(20, num_cols[0])[x_col]
-            agg_df = agg_df[agg_df[x_col].isin(top)]
-        agg_df = agg_df.sort_values(num_cols[0], ascending=False)
-
-        fig_bar = go.Figure()
-        colors = PLOT_THEME["colorway"]
-        for i, y_col in enumerate(num_cols[:3]):
-            fig_bar.add_trace(go.Bar(
-                x=agg_df[x_col].astype(str),
-                y=agg_df[y_col],
-                name=y_col,
-                marker_color=colors[i % len(colors)],
-                marker_line_width=0,
-                opacity=0.9,
-            ))
-        fig_bar.update_layout(
-            title=dict(text=f"📊  {num_cols[0]} by {x_col}", font_size=13),
-            barmode="group",
-            bargap=0.2,
-            **PLOT_THEME,
-            xaxis=dict(gridcolor="#252a35", tickangle=-30),
-            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
-            legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
-        )
-        charts.append(("Bar Chart", fig_bar))
-
-    # ── Line chart: date × numeric ────────────────────────────────────
-    if date_cols and num_cols:
-        x_col  = date_cols[0]
-        line_df = df[[x_col] + num_cols[:3]].sort_values(x_col)
-        fig_line = go.Figure()
-        colors = PLOT_THEME["colorway"]
-        for i, y_col in enumerate(num_cols[:3]):
-            fig_line.add_trace(go.Scatter(
-                x=line_df[x_col],
-                y=line_df[y_col],
-                mode="lines+markers",
-                name=y_col,
-                line=dict(color=colors[i % len(colors)], width=2),
-                marker=dict(size=5),
-                fill="tozeroy" if i == 0 else None,
-                fillcolor=f"rgba(0,229,160,0.06)" if i == 0 else None,
-            ))
-        fig_line.update_layout(
-            title=dict(text=f"📈  {num_cols[0]} over time", font_size=13),
-            **PLOT_THEME,
-            xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
-            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
-            legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
-        )
-        charts.append(("Line Chart", fig_line))
-
-    # ── Fallback: two numeric cols → scatter ──────────────────────────
-    if not charts and len(num_cols) >= 2:
-        fig_sc = px.scatter(
-            df, x=num_cols[0], y=num_cols[1],
-            trendline="ols" if len(df) > 3 else None,
-            title=f"📊  {num_cols[1]} vs {num_cols[0]}",
-        )
-        fig_sc.update_traces(marker=dict(color="#00e5a0", size=7))
-        fig_sc.update_layout(
-            **PLOT_THEME,
-            xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
-            yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
-        )
-        charts.append(("Scatter", fig_sc))
-
-    if not charts:
+    if cat_cols:
+        x_col, x_type = cat_cols[0], "cat"
+    elif date_cols:
+        x_col, x_type = date_cols[0], "date"
+    elif num_cols:
+        x_col, x_type = num_cols[0], "num"
+        num_cols = num_cols[1:]
+    else:
         return
 
-    # ── Render ────────────────────────────────────────────────────────
+    y_cols = num_cols[:3]
+    if not y_cols:
+        return
+
+    colors = PLOT_THEME["colorway"]
+
+    plot_df = df.copy()
+    if x_type == "cat" and plot_df[x_col].nunique() > 20:
+        top = plot_df.nlargest(20, y_cols[0])[x_col]
+        plot_df = plot_df[plot_df[x_col].isin(top)]
+    plot_df = (
+        plot_df.sort_values(y_cols[0], ascending=False)
+        if x_type in ("cat", "num")
+        else plot_df.sort_values(x_col)
+    )
+    x_vals = plot_df[x_col].astype(str) if x_type == "cat" else plot_df[x_col]
+
+    _key_seed = hashlib.md5(
+        (str(df.shape) + str(list(df.columns)) + str(df.iloc[0].tolist())).encode()
+    ).hexdigest()[:10]
+
+    # ── 1. BAR CHART ──────────────────────────────────────────────────
+    fig_bar = go.Figure()
+    for i, y_col in enumerate(y_cols):
+        fig_bar.add_trace(go.Bar(
+            x=x_vals, y=plot_df[y_col], name=y_col,
+            marker_color=colors[i % len(colors)],
+            marker_line_width=0, opacity=0.92,
+        ))
+    fig_bar.update_layout(
+        title=dict(text=f"📊  {y_cols[0]} by {x_col}", font_size=13),
+        barmode="group", bargap=0.18, **PLOT_THEME,
+        xaxis=dict(gridcolor="#252a35", tickangle=-30),
+        yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+        legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+    )
+
+    # ── 2. LINE GRAPH ─────────────────────────────────────────────────
+    fig_line = go.Figure()
+    for i, y_col in enumerate(y_cols):
+        fig_line.add_trace(go.Scatter(
+            x=x_vals, y=plot_df[y_col],
+            mode="lines+markers", name=y_col,
+            line=dict(color=colors[i % len(colors)], width=2.5),
+            marker=dict(size=6),
+            fill="tozeroy" if i == 0 else None,
+            fillcolor="rgba(0,229,160,0.07)" if i == 0 else None,
+        ))
+    fig_line.update_layout(
+        title=dict(text=f"📈  {y_cols[0]} trend by {x_col}", font_size=13),
+        **PLOT_THEME,
+        xaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35", tickangle=-30),
+        yaxis=dict(gridcolor="#252a35", zerolinecolor="#252a35"),
+        legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+    )
+
+    # ── 3. PIE CHART (donut) ──────────────────────────────────────────
+    pie_df = plot_df.head(8)
+    fig_pie = go.Figure(go.Pie(
+        labels=pie_df[x_col].astype(str),
+        values=pie_df[y_cols[0]],
+        hole=0.38,
+        marker=dict(
+            colors=colors * (len(pie_df) // len(colors) + 1),
+            line=dict(color="#0d0f12", width=2),
+        ),
+        textinfo="label+percent",
+        textfont=dict(size=11, color="#e8eaf0"),
+        insidetextorientation="radial",
+    ))
+    fig_pie.update_layout(
+        title=dict(text=f"🥧  Share of {y_cols[0]}", font_size=13),
+        **PLOT_THEME,
+        legend=dict(bgcolor="#13161b", bordercolor="#252a35"),
+        showlegend=True,
+    )
+
+    # ── Always render 3 tabs ──────────────────────────────────────────
     st.markdown(
         '<div class="viz-header">'
         '<span class="viz-accent">▲</span> Insights &nbsp;&mdash;&nbsp; '
@@ -604,13 +614,16 @@ def smart_charts(df: pd.DataFrame):
     )
     st.markdown('<div class="viz-body">', unsafe_allow_html=True)
 
-    if len(charts) == 1:
-        st.plotly_chart(charts[0][1], use_container_width=True, config={"displayModeBar": False})
-    else:
-        tabs = st.tabs([label for label, _ in charts])
-        for tab, (_, fig) in zip(tabs, charts):
-            with tab:
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    tab_bar, tab_line, tab_pie = st.tabs(["📊 Bar Chart", "📈 Line Graph", "🥧 Pie Chart"])
+    with tab_bar:
+        st.plotly_chart(fig_bar,  use_container_width=True,
+                        config={"displayModeBar": False}, key=f"bar_{_key_seed}")
+    with tab_line:
+        st.plotly_chart(fig_line, use_container_width=True,
+                        config={"displayModeBar": False}, key=f"line_{_key_seed}")
+    with tab_pie:
+        st.plotly_chart(fig_pie,  use_container_width=True,
+                        config={"displayModeBar": False}, key=f"pie_{_key_seed}")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
